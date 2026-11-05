@@ -1,14 +1,17 @@
 mod color;
+mod controls;
 mod framebuffer;
+mod hud;
 mod mesh;
 mod png;
 mod renderer;
 mod shaders;
 
+use controls::Controls;
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use png::WritePng;
 use renderer::{Renderer, HEIGHT, WIDTH};
-use shaders::{BodyKind, ALL_BODIES};
+use shaders::{BodyKind, ShaderSettings, ALL_BODIES};
 use std::{
     error::Error,
     fs,
@@ -27,6 +30,10 @@ struct Options {
     body_selected: bool,
     frames: usize,
     warmup: usize,
+    brightness: f32,
+    detail: f32,
+    help: bool,
+    help_overlay: bool,
 }
 
 fn main() {
@@ -38,7 +45,12 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn Error>> {
     let options = parse_args(&std::env::args().skip(1).collect::<Vec<_>>())?;
+    if options.help {
+        println!("{}", controls_help());
+        return Ok(());
+    }
     let mut renderer = Renderer::new();
+    configure_renderer(&mut renderer, &options);
     if options.benchmark {
         benchmark(&mut renderer, &options);
         return Ok(());
@@ -60,7 +72,16 @@ fn run() -> Result<(), Box<dyn Error>> {
         );
     }
     if let Some(path) = options.output {
-        return save(&mut renderer, options.body, options.time, Path::new(&path));
+        renderer.render(options.body, options.time);
+        if options.help_overlay {
+            hud::draw_help(
+                &mut renderer.framebuffer.buffer,
+                WIDTH,
+                HEIGHT,
+                renderer.shader_settings,
+            );
+        }
+        return save_frame(&renderer, Path::new(&path));
     }
     if options.headless {
         return Err("--headless requires --output or --render-all".into());
@@ -69,6 +90,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 }
 
 fn parse_args(args: &[String]) -> Result<Options, String> {
+    let input_count = args.len();
     let mut options = Options {
         body: BodyKind::Sun,
         time: 0.0,
@@ -79,6 +101,10 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
         body_selected: false,
         frames: 12,
         warmup: 2,
+        brightness: 1.0,
+        detail: 1.0,
+        help: false,
+        help_overlay: false,
     };
     let mut benchmark_counts_set = false;
     let mut args = args.iter();
@@ -87,7 +113,10 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
             "--render-all" => options.render_all = true,
             "--headless" => options.headless = true,
             "--benchmark" => options.benchmark = true,
-            "--body" | "--output" | "--time" | "--frames" | "--warmup" => {
+            "--help" | "-h" => options.help = true,
+            "--help-overlay" => options.help_overlay = true,
+            "--body" | "--output" | "--time" | "--frames" | "--warmup" | "--brightness"
+            | "--detail" => {
                 let value = args
                     .next()
                     .filter(|s| !s.is_empty() && !s.starts_with("--"))
@@ -102,6 +131,27 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
                             .ok_or_else(|| format!("unknown body: {value}"))?
                     }
                     "--output" => options.output = Some(value.clone()),
+                    "--brightness" | "--detail" => {
+                        let setting = value
+                            .parse::<f32>()
+                            .map_err(|_| format!("invalid {flag}: {value}"))?;
+                        if !setting.is_finite() {
+                            return Err(format!("{flag} must be finite: {value}"));
+                        }
+                        let (min, max) = if flag == "--brightness" {
+                            (0.25, 2.0)
+                        } else {
+                            (0.5, 2.0)
+                        };
+                        if !(min..=max).contains(&setting) {
+                            return Err(format!("{flag} must be in {min}..={max}: {value}"));
+                        }
+                        if flag == "--brightness" {
+                            options.brightness = setting;
+                        } else {
+                            options.detail = setting;
+                        }
+                    }
                     "--frames" | "--warmup" => {
                         let count = value
                             .parse::<usize>()
@@ -138,7 +188,30 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
     if options.benchmark && options.frames.checked_add(options.warmup).is_none() {
         return Err("frame count overflow".into());
     }
+    if options.help_overlay
+        && (!options.headless
+            || options.output.is_none()
+            || options.render_all
+            || options.benchmark)
+    {
+        return Err("--help-overlay requires one --headless --output render".into());
+    }
+    if options.help && input_count > 1 {
+        return Err("--help cannot be combined with other options".into());
+    }
     Ok(options)
+}
+
+fn configure_renderer(renderer: &mut Renderer, options: &Options) {
+    renderer.shader_settings = ShaderSettings {
+        brightness: options.brightness,
+        detail: options.detail,
+    }
+    .normalized();
+}
+
+fn controls_help() -> &'static str {
+    "Teclas del atlas celeste:\n  1-6: Sol, Rocoso, Gigante gaseoso, Oceanico, Volcanico, Helado\n  Tab: cambiar cuerpo | Flechas: rotar | O: trasladar\n  Space: pausa | S: guardar captura PNG | Esc: salir\n  Z: bajar brillo | X: subir brillo | E / Q: detalle | R: reiniciar ajustes\n  H: mostrar u ocultar ayuda\n\nUso de CLI:\n  --body NOMBRE: seleccionar cuerpo (predeterminado sol)\n  --brightness N: brillo 0.25..2.0 (predeterminado 1.0)\n  --detail N: escala de detalle 0.5..2.0 (predeterminado 1.0)\n  --time N: tiempo de animacion finito (predeterminado 0.0)\n  --output RUTA: guardar un PNG; sin esta opcion abre la ventana\n  --render-all: exportar seis cuerpos y galeria; carpeta predeterminada screenshots\n  --headless: render sin ventana; requiere --output o --render-all\n  --help-overlay: anadir ayuda solo a un PNG con --headless --output\n  --benchmark: imprimir mediciones de render en JSON\n  --frames N: muestras del benchmark, entero positivo (predeterminado 12)\n  --warmup N: renders de calentamiento (predeterminado 2)\n  --help / -h: mostrar esta ayuda y salir"
 }
 
 fn benchmark(renderer: &mut Renderer, options: &Options) {
@@ -173,7 +246,7 @@ fn benchmark(renderer: &mut Renderer, options: &Options) {
         if body_index > 0 {
             println!(",");
         }
-        print!("{{\"body\":\"{}\",\"samples\":[{}],\"median_ms\":{:.9},\"p95_ms\":{:.9},\"min_ms\":{:.9},\"max_ms\":{:.9},\"fps\":{:.9}}}", body.slug(), values, median, p95, sorted[0], sorted[n - 1], 1000.0 / median);
+        print!("{{\"body\":\"{}\",\"brightness\":{:.2},\"detail\":{:.2},\"samples\":[{}],\"median_ms\":{:.9},\"p95_ms\":{:.9},\"min_ms\":{:.9},\"max_ms\":{:.9},\"fps\":{:.9}}}", body.slug(), options.brightness, options.detail, values, median, p95, sorted[0], sorted[n - 1], 1000.0 / median);
     }
     println!("]}}");
 }
@@ -183,6 +256,7 @@ fn run_window(body: BodyKind, time: f32, renderer: &mut Renderer) -> Result<(), 
     let mut selected = body;
     let mut paused = false;
     let mut translating = false;
+    let mut controls = Controls { help_visible: true };
     let mut last = Instant::now();
     let mut elapsed = time;
     while window.is_open() && !window.is_key_down(Key::Escape) {
@@ -197,6 +271,11 @@ fn run_window(body: BodyKind, time: f32, renderer: &mut Renderer) -> Result<(), 
         }
         if window.is_key_pressed(Key::O, KeyRepeat::No) {
             translating = !translating;
+        }
+        for key in [Key::Z, Key::X, Key::Q, Key::E, Key::R, Key::H] {
+            if window.is_key_pressed(key, KeyRepeat::No) {
+                controls.handle_key(key, &mut renderer.shader_settings);
+            }
         }
         if window.is_key_pressed(Key::Tab, KeyRepeat::No) {
             let index = ALL_BODIES.iter().position(|b| *b == selected).unwrap_or(0);
@@ -235,6 +314,14 @@ fn run_window(body: BodyKind, time: f32, renderer: &mut Renderer) -> Result<(), 
         renderer.render(selected, elapsed);
         if window.is_key_pressed(Key::S, KeyRepeat::No) {
             save_frame(renderer, Path::new("screenshots/capture.png"))?;
+        }
+        if controls.help_visible {
+            hud::draw_help(
+                &mut renderer.framebuffer.buffer,
+                WIDTH,
+                HEIGHT,
+                renderer.shader_settings,
+            );
         }
         window.set_title(&format!(
             "{} | 1-6/Tab: cuerpo | Space: pausa | flechas: rotar | O: trasladar | S: PNG",
@@ -382,6 +469,90 @@ mod tests {
         }
         assert!(parse(&["--render-all"]).unwrap().render_all);
     }
+    #[test]
+    fn shader_settings_cli_values_validate_and_configure_same_renderer_path() {
+        let options = parse(&[
+            "--headless",
+            "--output",
+            "out.png",
+            "--brightness",
+            "1.75",
+            "--detail",
+            "0.65",
+        ])
+        .unwrap();
+        let mut renderer = Renderer::new();
+        configure_renderer(&mut renderer, &options);
+        assert_eq!(renderer.shader_settings.brightness, 1.75);
+        assert_eq!(renderer.shader_settings.detail, 0.65);
+
+        for (flag, value) in [
+            ("--brightness", "NaN"),
+            ("--brightness", "0.24"),
+            ("--brightness", "2.01"),
+            ("--detail", "inf"),
+            ("--detail", "0.49"),
+            ("--detail", "2.01"),
+        ] {
+            assert!(parse(&[flag, value]).is_err(), "{flag} {value}");
+        }
+        let defaults = parse(&[]).unwrap();
+        assert_eq!((defaults.brightness, defaults.detail), (1.0, 1.0));
+    }
+
+    #[test]
+    fn help_and_overlay_cli_routes_are_restricted() {
+        assert!(parse(&["--help"]).unwrap().help);
+        assert!(parse(&["-h"]).unwrap().help);
+        assert!(parse(&["--help", "--headless"]).is_err());
+        assert!(
+            parse(&["--headless", "--output", "preview.png", "--help-overlay"])
+                .unwrap()
+                .help_overlay
+        );
+        for args in [
+            vec!["--help-overlay"],
+            vec!["--output", "preview.png", "--help-overlay"],
+            vec![
+                "--headless",
+                "--render-all",
+                "--output",
+                "out",
+                "--help-overlay",
+            ],
+            vec!["--benchmark", "--help-overlay"],
+        ] {
+            assert!(parse(&args).is_err(), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn help_text_documents_cli_options_and_bounds() {
+        let help = controls_help();
+        assert!(help.contains("Z: bajar brillo | X: subir brillo"));
+        for expected in [
+            "--body",
+            "--brightness",
+            "--detail",
+            "--help-overlay",
+            "--headless",
+            "--output",
+            "--time",
+            "--render-all",
+            "--benchmark",
+            "--frames",
+            "--warmup",
+            "0.25",
+            "0.5",
+            "2.0",
+            "predeterminado 0.0",
+            "predeterminado 12",
+            "predeterminado 2",
+        ] {
+            assert!(help.contains(expected), "missing {expected}");
+        }
+    }
+
     #[test]
     fn gallery_places_all_six_full_tiles_without_overlap() {
         let mut gallery = vec![0; WIDTH * 3 * HEIGHT * 2];

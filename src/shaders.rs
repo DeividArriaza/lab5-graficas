@@ -13,6 +13,38 @@ pub enum BodyKind {
     Ice,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ShaderSettings {
+    pub brightness: f32,
+    pub detail: f32,
+}
+
+impl Default for ShaderSettings {
+    fn default() -> Self {
+        Self {
+            brightness: 1.0,
+            detail: 1.0,
+        }
+    }
+}
+
+impl ShaderSettings {
+    pub fn normalized(self) -> Self {
+        Self {
+            brightness: normalize_setting(self.brightness, 0.25, 2.0),
+            detail: normalize_setting(self.detail, 0.5, 2.0),
+        }
+    }
+}
+
+fn normalize_setting(value: f32, min: f32, max: f32) -> f32 {
+    if value.is_finite() {
+        value.clamp(min, max)
+    } else {
+        1.0
+    }
+}
+
 const RING_GAPS: [f32; 3] = [1.55, 1.83, 2.02];
 
 pub const ALL_BODIES: [BodyKind; 6] = [
@@ -110,8 +142,30 @@ fn lighting(base: Vec3, position: Vec3, normal: Vec3, atmosphere: Vec3) -> Vec3 
         + Vec3::new(1.0, 0.72, 0.42) * 0.018 * position.z.abs()
 }
 
+#[allow(dead_code)]
 pub fn shade(kind: BodyKind, position: Vec3, normal: Vec3, time: f32) -> Color {
-    let p = warp(position * 3.1, time);
+    shade_with_settings(kind, position, normal, time, ShaderSettings::default())
+}
+
+#[allow(dead_code)]
+pub fn shade_with_settings(
+    kind: BodyKind,
+    position: Vec3,
+    normal: Vec3,
+    time: f32,
+    settings: ShaderSettings,
+) -> Color {
+    shade_with_normalized_settings(kind, position, normal, time, settings.normalized())
+}
+
+pub(crate) fn shade_with_normalized_settings(
+    kind: BodyKind,
+    position: Vec3,
+    normal: Vec3,
+    time: f32,
+    settings: ShaderSettings,
+) -> Color {
+    let p = warp(position * (3.1 * settings.detail), time);
     let n = if kind == BodyKind::Rocky {
         #[cfg(test)]
         GLOBAL_FBM_CALLS.with(|calls| calls.set(calls.get() + 1));
@@ -145,7 +199,7 @@ pub fn shade(kind: BodyKind, position: Vec3, normal: Vec3, time: f32) -> Color {
         }
         BodyKind::Rocky => {
             // Sedimentary terracotta strata, impact basins, exposed minerals, cyan veins.
-            let strata = (position.y * 27.0 + n * 3.0).sin(); // layered strata
+            let strata = (position.y * (27.0 * settings.detail) + n * 3.0).sin(); // layered strata
             let crater = fbm(p * 5.4, 3); // cratered regolith
             let minerals = fbm(p * 12.0 + Vec3::new(2.0, 0.0, 3.0), 3); // mineral inclusions
             let vein = (fbm(p * 9.0, 3) * 7.0).sin().abs(); // branching cyan mineral veins
@@ -169,9 +223,10 @@ pub fn shade(kind: BodyKind, position: Vec3, normal: Vec3, time: f32) -> Color {
         }
         BodyKind::GasGiant => {
             // Turquoise/teal/cream/ochre cloud belts and a persistent rotating storm.
-            let belts = (position.y * 24.0 + fbm(p * 1.2, 3) * 3.8).sin(); // cloud bands
+            let belts = (position.y * (24.0 * settings.detail) + fbm(p * 1.2, 3) * 3.8).sin(); // cloud bands
             let turbulence = fbm(warp(p * 2.0, time * 0.8), 4); // turbulent swirls
-            let storm_uv = Vec3::new(position.x * 4.0, position.y * 3.0, position.z * 2.0);
+            let storm_uv =
+                Vec3::new(position.x * 4.0, position.y * 3.0, position.z * 2.0) * settings.detail;
             let storm = ((storm_uv.x * storm_uv.x * 1.2 + storm_uv.y * storm_uv.y * 2.0).sqrt()
                 - 0.68
                 + fbm(storm_uv * 3.0 + Vec3::new(time * 0.16, 0.0, 0.0), 3) * 0.18)
@@ -284,7 +339,7 @@ pub fn shade(kind: BodyKind, position: Vec3, normal: Vec3, time: f32) -> Color {
         }
     };
     if kind == BodyKind::Sun {
-        return clamp_color(base * 1.65);
+        return clamp_color(base * (1.65 * settings.brightness));
     }
     let atmosphere = match kind {
         BodyKind::Rocky => Vec3::new(0.20, 0.10, 0.07),
@@ -294,11 +349,25 @@ pub fn shade(kind: BodyKind, position: Vec3, normal: Vec3, time: f32) -> Color {
         BodyKind::Ice => Vec3::new(0.30, 0.66, 1.0),
         _ => Vec3::zeros(),
     };
-    clamp_color(lighting(base, position, normal, atmosphere))
+    clamp_color(lighting(base, position, normal, atmosphere) * settings.brightness)
 }
 
 /// An annulus with several dusty bands and narrow Cassini-like dark divisions.
+#[allow(dead_code)]
 pub fn shade_ring(position: Vec3, time: f32) -> Color {
+    shade_ring_with_settings(position, time, ShaderSettings::default())
+}
+
+#[allow(dead_code)]
+pub fn shade_ring_with_settings(position: Vec3, time: f32, settings: ShaderSettings) -> Color {
+    shade_ring_with_normalized_settings(position, time, settings.normalized())
+}
+
+pub(crate) fn shade_ring_with_normalized_settings(
+    position: Vec3,
+    time: f32,
+    settings: ShaderSettings,
+) -> Color {
     let r = (position.x * position.x + position.z * position.z).sqrt();
     let radial = fbm(
         Vec3::new(r * 17.0 + time * 0.015, position.y * 11.0, r * 3.0),
@@ -312,12 +381,32 @@ pub fn shade_ring(position: Vec3, time: f32) -> Color {
     let annulus = ((r - 1.35) / 0.12).clamp(0.0, 1.0) * ((2.15 - r) / 0.12).clamp(0.0, 1.0);
     let dust = 0.30 + 0.20 * bands + 0.12 * radial;
     let c = Vec3::new(0.64, 0.48, 0.29) * (dust.clamp(0.08, 0.75) * annulus * (1.0 - gap * 0.94));
-    clamp_color(c + Vec3::new(0.025, 0.018, 0.012))
+    clamp_color((c + Vec3::new(0.025, 0.018, 0.012)) * settings.brightness)
 }
 
 /// A moon surface with noisy impact basins, rims and bright ejecta.
+#[allow(dead_code)]
 pub fn shade_moon(position: Vec3, normal: Vec3, time: f32) -> Color {
-    let p = warp(position * 4.0, time * 0.03);
+    shade_moon_with_settings(position, normal, time, ShaderSettings::default())
+}
+
+#[allow(dead_code)]
+pub fn shade_moon_with_settings(
+    position: Vec3,
+    normal: Vec3,
+    time: f32,
+    settings: ShaderSettings,
+) -> Color {
+    shade_moon_with_normalized_settings(position, normal, time, settings.normalized())
+}
+
+pub(crate) fn shade_moon_with_normalized_settings(
+    position: Vec3,
+    normal: Vec3,
+    time: f32,
+    settings: ShaderSettings,
+) -> Color {
+    let p = warp(position * (4.0 * settings.detail), time * 0.03);
     let terrain = fbm(p * 3.0, 4);
     let craters = fbm(p * 8.0, 3);
     let rim = (craters.abs() * 2.0).clamp(0.0, 1.0);
@@ -335,12 +424,9 @@ pub fn shade_moon(position: Vec3, normal: Vec3, time: f32) -> Color {
         Vec3::new(0.72, 0.68, 0.59),
         ((ejecta - 0.25) * 0.30).clamp(0.0, 0.12),
     );
-    clamp_color(lighting(
-        detailed,
-        position,
-        normal,
-        Vec3::new(0.12, 0.14, 0.18),
-    ))
+    clamp_color(
+        lighting(detailed, position, normal, Vec3::new(0.12, 0.14, 0.18)) * settings.brightness,
+    )
 }
 
 #[cfg(test)]
@@ -348,6 +434,96 @@ mod tests {
     use super::*;
     use nalgebra_glm::vec3;
     use std::collections::HashSet;
+
+    #[test]
+    fn shader_settings_default_matches_legacy_entry_points_exactly() {
+        let p = vec3(0.2, -0.3, 0.8);
+        let normal = vec3(0.0, 0.0, 1.0);
+        let settings = ShaderSettings::default();
+        for kind in ALL_BODIES {
+            assert_eq!(
+                shade(kind, p, normal, 0.75),
+                shade_with_settings(kind, p, normal, 0.75, settings)
+            );
+        }
+        assert_eq!(
+            shade_ring(p, 0.75),
+            shade_ring_with_settings(p, 0.75, settings)
+        );
+        assert_eq!(
+            shade_moon(p, normal, 0.75),
+            shade_moon_with_settings(p, normal, 0.75, settings)
+        );
+    }
+
+    #[test]
+    fn shader_settings_sanitize_nonfinite_values_and_clamp_ranges() {
+        assert_eq!(
+            ShaderSettings {
+                brightness: f32::NAN,
+                detail: f32::INFINITY
+            }
+            .normalized(),
+            ShaderSettings::default()
+        );
+        assert_eq!(
+            ShaderSettings {
+                brightness: -10.0,
+                detail: 10.0
+            }
+            .normalized(),
+            ShaderSettings {
+                brightness: 0.25,
+                detail: 2.0
+            }
+        );
+        assert_eq!(
+            ShaderSettings {
+                brightness: 10.0,
+                detail: -10.0
+            }
+            .normalized(),
+            ShaderSettings {
+                brightness: 2.0,
+                detail: 0.5
+            }
+        );
+    }
+
+    #[test]
+    fn brightness_and_detail_settings_change_surface_shading() {
+        let p = vec3(0.213, -0.347, 0.891);
+        let normal = vec3(0.0, 0.0, 1.0);
+        let defaults = ShaderSettings::default();
+        let dim = ShaderSettings {
+            brightness: 0.5,
+            detail: 1.0,
+        };
+        let coarse = ShaderSettings {
+            brightness: 1.0,
+            detail: 0.5,
+        };
+        let fine = ShaderSettings {
+            brightness: 1.0,
+            detail: 2.0,
+        };
+        assert_ne!(
+            shade_with_settings(BodyKind::Ice, p, normal, 0.0, defaults),
+            shade_with_settings(BodyKind::Ice, p, normal, 0.0, dim)
+        );
+        assert_ne!(
+            shade_with_settings(BodyKind::Ice, p, normal, 0.0, coarse),
+            shade_with_settings(BodyKind::Ice, p, normal, 0.0, fine)
+        );
+        assert_ne!(
+            shade_ring_with_settings(p, 0.0, dim),
+            shade_ring_with_settings(p, 0.0, defaults)
+        );
+        assert_ne!(
+            shade_moon_with_settings(p, normal, 0.0, dim),
+            shade_moon_with_settings(p, normal, 0.0, defaults)
+        );
+    }
 
     #[test]
     fn global_fbm_is_evaluated_only_for_rocky() {

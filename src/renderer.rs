@@ -1,7 +1,11 @@
 use crate::color::Color;
 use crate::framebuffer::Framebuffer;
 use crate::mesh::{Mesh, Vertex};
-use crate::shaders::{shade, shade_moon, shade_ring, BodyKind};
+pub use crate::shaders::ShaderSettings;
+use crate::shaders::{
+    shade_moon_with_normalized_settings, shade_ring_with_normalized_settings,
+    shade_with_normalized_settings, BodyKind,
+};
 use nalgebra_glm::{vec3, Vec3};
 
 pub const WIDTH: usize = 1100;
@@ -13,6 +17,7 @@ pub struct Renderer {
     pub framebuffer: Framebuffer,
     pub rotation: Vec3,
     pub translation: Vec3,
+    pub shader_settings: ShaderSettings,
 }
 
 impl Renderer {
@@ -25,6 +30,7 @@ impl Renderer {
             framebuffer,
             rotation: Vec3::zeros(),
             translation: Vec3::zeros(),
+            shader_settings: ShaderSettings::default(),
         }
     }
 
@@ -33,6 +39,7 @@ impl Renderer {
     }
 
     fn render_with_mode(&mut self, kind: BodyKind, time: f32, parallel: bool) {
+        let shader_settings = self.shader_settings.normalized();
         self.framebuffer.clear();
         let angle = time * 0.18;
         let orientation = rotation_x(self.rotation.x) * rotation_y(self.rotation.y);
@@ -51,7 +58,7 @@ impl Renderer {
                 scale,
                 self.translation,
                 parallel,
-                |p, _n| shade_ring(p, time),
+                |p, _n| shade_ring_with_normalized_settings(p, time, shader_settings),
             );
         }
         draw_mesh(
@@ -61,7 +68,7 @@ impl Renderer {
             scale,
             self.translation,
             parallel,
-            |p, n| shade(kind, p, n, time),
+            |p, n| shade_with_normalized_settings(kind, p, n, time, shader_settings),
         );
         if kind == BodyKind::GasGiant {
             let screen_center = self.translation + moon_center(ring_tilt, scale, angle);
@@ -72,7 +79,7 @@ impl Renderer {
                 27.0,
                 screen_center,
                 parallel,
-                |p, n| shade_moon(p, n, time),
+                |p, n| shade_moon_with_normalized_settings(p, n, time, shader_settings),
             );
         }
     }
@@ -262,6 +269,50 @@ fn starfield(w: usize, h: usize) -> Vec<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn renderer_settings_default_and_shading_changes_preserve_depth_and_background() {
+        let mut default = Renderer::new();
+        assert_eq!(default.shader_settings, ShaderSettings::default());
+        default.framebuffer.clear();
+        let background = default.framebuffer.buffer.clone();
+        default.render_with_mode(BodyKind::GasGiant, 0.0, true);
+        let baseline_colors = default.framebuffer.buffer.clone();
+        let baseline_depth = default.framebuffer.zbuffer.clone();
+
+        let mut adjusted = Renderer::new();
+        adjusted.shader_settings = ShaderSettings {
+            brightness: 0.6,
+            detail: 1.8,
+        };
+        adjusted.render_with_mode(BodyKind::GasGiant, 0.0, true);
+
+        assert_eq!(adjusted.framebuffer.zbuffer, baseline_depth);
+        if let Some((index, (&pixel, &background, &depth))) = adjusted
+            .framebuffer
+            .buffer
+            .iter()
+            .zip(&background)
+            .zip(&baseline_depth)
+            .enumerate()
+            .find_map(|(index, ((pixel, background), depth))| {
+                (depth == &f32::NEG_INFINITY && pixel != background)
+                    .then_some((index, (pixel, background, depth)))
+            })
+        {
+            panic!(
+                "background changed at {index}: {pixel:#08x} != {background:#08x}, depth={depth}"
+            );
+        }
+        assert_ne!(adjusted.framebuffer.buffer, baseline_colors);
+        assert!(adjusted
+            .framebuffer
+            .buffer
+            .iter()
+            .zip(&baseline_colors)
+            .zip(&baseline_depth)
+            .any(|((&adjusted, &baseline), &depth)| depth > 0.0 && adjusted != baseline));
+    }
 
     #[test]
     fn degenerate_nonfinite_and_offscreen_triangles_do_not_draw() {

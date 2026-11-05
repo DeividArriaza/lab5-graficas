@@ -74,10 +74,22 @@ En el QA de rendimiento, el renderer con Rayon y shaders optimizados se comparó
 
 ## Controles
 
+La guía detallada está en `docs/CONTROLES.md`. Las funciones se verificaron con pruebas headless; la revisión interactiva con teclado físico sigue pendiente. El QA de release pasó, incluida la prueba de que `--help` enumera las opciones y termina sin abrir una ventana; los resultados están en `docs/VERIFICATION.md`.
+
+### Cómo usar en 30 segundos
+
+Ejecute `cargo run --release`, pulse **3** para el gaseoso y **Espacio** para pausar. Pulse **Z** para bajar el brillo y **X** para subirlo; **Q / E** cambia la escala del patrón. **R** restablece brillo y detalle a 1, **H** alterna la ayuda y **S** guarda una captura limpia. **S sobrescribe `screenshots/capture.png`**: guarde antes cualquier imagen que quiera conservar.
+
+![Vista previa de ayuda y controles](screenshots/controles.png)
+
 | Tecla | Acción |
 | --- | --- |
 | 1–6 | Elegir cuerpo |
 | Tab | Siguiente cuerpo |
+| Z / X | Bajar / subir brillo: paso 0.1, rango 0.25–2, inicial 1 |
+| Q / E | Reducir / aumentar frecuencia del patrón: paso 0.1, rango 0.5–2, inicial 1 |
+| R | Restablecer brillo y detalle, sin reiniciar cámara ni pausa |
+| H | Mostrar u ocultar la ayuda, visible al inicio |
 | Espacio | Pausar o reanudar animación |
 | Flechas | Rotar el cuerpo y su escena |
 | O | Activar o desactivar traslación oscilante |
