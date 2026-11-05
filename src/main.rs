@@ -23,6 +23,10 @@ struct Options {
     output: Option<String>,
     render_all: bool,
     headless: bool,
+    benchmark: bool,
+    body_selected: bool,
+    frames: usize,
+    warmup: usize,
 }
 
 fn main() {
@@ -35,6 +39,10 @@ fn main() {
 fn run() -> Result<(), Box<dyn Error>> {
     let options = parse_args(&std::env::args().skip(1).collect::<Vec<_>>())?;
     let mut renderer = Renderer::new();
+    if options.benchmark {
+        benchmark(&mut renderer, &options);
+        return Ok(());
+    }
     if options.render_all {
         let directory = options.output.as_deref().unwrap_or("screenshots");
         for body in ALL_BODIES {
@@ -67,19 +75,26 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
         output: None,
         render_all: false,
         headless: false,
+        benchmark: false,
+        body_selected: false,
+        frames: 12,
+        warmup: 2,
     };
+    let mut benchmark_counts_set = false;
     let mut args = args.iter();
     while let Some(flag) = args.next() {
         match flag.as_str() {
             "--render-all" => options.render_all = true,
             "--headless" => options.headless = true,
-            "--body" | "--output" | "--time" => {
+            "--benchmark" => options.benchmark = true,
+            "--body" | "--output" | "--time" | "--frames" | "--warmup" => {
                 let value = args
                     .next()
                     .filter(|s| !s.is_empty() && !s.starts_with("--"))
                     .ok_or_else(|| format!("{flag} requires a value"))?;
                 match flag.as_str() {
                     "--body" => {
+                        options.body_selected = true;
                         options.body = ALL_BODIES
                             .iter()
                             .copied()
@@ -87,6 +102,20 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
                             .ok_or_else(|| format!("unknown body: {value}"))?
                     }
                     "--output" => options.output = Some(value.clone()),
+                    "--frames" | "--warmup" => {
+                        let count = value
+                            .parse::<usize>()
+                            .map_err(|_| format!("invalid {flag}: {value}"))?;
+                        if flag == "--frames" {
+                            if count == 0 {
+                                return Err("--frames must be positive".into());
+                            }
+                            options.frames = count;
+                        } else {
+                            options.warmup = count;
+                        }
+                        benchmark_counts_set = true;
+                    }
                     _ => {
                         options.time = value
                             .parse::<f32>()
@@ -100,7 +129,53 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
             _ => return Err(format!("unknown flag: {flag}")),
         }
     }
+    if benchmark_counts_set && !options.benchmark {
+        return Err("--frames and --warmup require --benchmark".into());
+    }
+    if options.benchmark && (options.output.is_some() || options.render_all) {
+        return Err("--benchmark cannot be combined with --output or --render-all".into());
+    }
+    if options.benchmark && options.frames.checked_add(options.warmup).is_none() {
+        return Err("frame count overflow".into());
+    }
     Ok(options)
+}
+
+fn benchmark(renderer: &mut Renderer, options: &Options) {
+    let bodies: &[BodyKind] = if options.body_selected {
+        std::slice::from_ref(&options.body)
+    } else {
+        &ALL_BODIES
+    };
+    println!("{{\"results\":[");
+    for (body_index, &body) in bodies.iter().enumerate() {
+        let mut samples = Vec::with_capacity(options.frames);
+        for index in 0..options.warmup + options.frames {
+            let time = options.time + index as f32 / 60.0;
+            let start = Instant::now();
+            renderer.render(body, time);
+            let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+            std::hint::black_box(&renderer.framebuffer.buffer);
+            if index >= options.warmup {
+                samples.push(elapsed);
+            }
+        }
+        let mut sorted = samples.clone();
+        sorted.sort_by(f64::total_cmp);
+        let n = sorted.len();
+        let median = (sorted[(n - 1) / 2] + sorted[n / 2]) / 2.0;
+        let p95 = sorted[n - n / 20 - 1];
+        let values = samples
+            .iter()
+            .map(|sample| format!("{sample:.9}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        if body_index > 0 {
+            println!(",");
+        }
+        print!("{{\"body\":\"{}\",\"samples\":[{}],\"median_ms\":{:.9},\"p95_ms\":{:.9},\"min_ms\":{:.9},\"max_ms\":{:.9},\"fps\":{:.9}}}", body.slug(), values, median, p95, sorted[0], sorted[n - 1], 1000.0 / median);
+    }
+    println!("]}}");
 }
 
 fn run_window(body: BodyKind, time: f32, renderer: &mut Renderer) -> Result<(), Box<dyn Error>> {
@@ -235,6 +310,37 @@ mod tests {
     use super::*;
     fn parse(args: &[&str]) -> Result<Options, String> {
         parse_args(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+    }
+    #[test]
+    fn benchmark_accepts_frame_counts_body_and_time() {
+        assert!(parse(&[
+            "--benchmark",
+            "--frames",
+            "12",
+            "--warmup",
+            "2",
+            "--body",
+            "gaseoso",
+            "--time",
+            "2"
+        ])
+        .is_ok());
+    }
+    #[test]
+    fn benchmark_rejects_invalid_counts_and_incompatible_modes() {
+        for args in [
+            vec!["--benchmark", "--frames", "0"],
+            vec!["--benchmark", "--frames", "-1"],
+            vec!["--benchmark", "--warmup", "-1"],
+            vec!["--benchmark", "--warmup", "x"],
+            vec!["--benchmark", "--frames"],
+            vec!["--frames", "1"],
+            vec!["--benchmark", "--output", "a.png"],
+            vec!["--benchmark", "--render-all"],
+        ] {
+            assert!(parse(&args).is_err(), "{args:?}");
+        }
+        assert!(parse(&["--benchmark", "--frames", "1", "--warmup", "0"]).is_ok());
     }
     #[test]
     fn invalid_and_nonfinite_times_are_rejected() {

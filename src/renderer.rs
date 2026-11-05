@@ -29,6 +29,10 @@ impl Renderer {
     }
 
     pub fn render(&mut self, kind: BodyKind, time: f32) {
+        self.render_with_mode(kind, time, true);
+    }
+
+    fn render_with_mode(&mut self, kind: BodyKind, time: f32, parallel: bool) {
         self.framebuffer.clear();
         let angle = time * 0.18;
         let orientation = rotation_x(self.rotation.x) * rotation_y(self.rotation.y);
@@ -46,6 +50,7 @@ impl Renderer {
                 ring_tilt,
                 scale,
                 self.translation,
+                parallel,
                 |p, _n| shade_ring(p, time),
             );
         }
@@ -55,6 +60,7 @@ impl Renderer {
             tilt,
             scale,
             self.translation,
+            parallel,
             |p, n| shade(kind, p, n, time),
         );
         if kind == BodyKind::GasGiant {
@@ -65,6 +71,7 @@ impl Renderer {
                 tilt,
                 27.0,
                 screen_center,
+                parallel,
                 |p, n| shade_moon(p, n, time),
             );
         }
@@ -78,16 +85,18 @@ fn moon_center(orientation: nalgebra_glm::Mat4, planet_radius: f32, angle: f32) 
         .transform_vector(&(vec3(2.85 * phase.cos(), 0.0, 2.85 * phase.sin()) * planet_radius))
 }
 
-fn draw_mesh<F: Fn(Vec3, Vec3) -> Color>(
+fn draw_mesh<F: Fn(Vec3, Vec3) -> Color + Send + Sync>(
     fb: &mut Framebuffer,
     mesh: &Mesh,
     rotation: nalgebra_glm::Mat4,
     radius: f32,
     center: Vec3,
+    parallel: bool,
     shader: F,
 ) {
     let cx = fb.width as f32 * 0.5;
     let cy = fb.height as f32 * 0.5;
+    let mut prepared = Vec::with_capacity(mesh.triangles.len());
     for tri in &mesh.triangles {
         let mut screen = [(0.0f32, 0.0f32, 0.0f32); 3];
         let mut pos = [vec3(0.0, 0.0, 0.0); 3];
@@ -107,7 +116,22 @@ fn draw_mesh<F: Fn(Vec3, Vec3) -> Color>(
         if tri[0].normal.dot(&tri[0].position) > 0.5 && norm.iter().all(|normal| normal.z <= 0.0) {
             continue;
         }
-        raster_triangle(fb, screen, pos, norm, &shader);
+        prepared.push((screen, pos, norm));
+    }
+    if parallel {
+        let width = fb.width;
+        let height = fb.height;
+        fb.for_each_band_mut(16, |start_y, pixels, depths| {
+            for (screen, pos, norm) in &prepared {
+                raster_region(
+                    width, height, start_y, pixels, depths, *screen, *pos, *norm, &shader,
+                );
+            }
+        });
+    } else {
+        for (screen, pos, norm) in prepared {
+            raster_triangle(fb, screen, pos, norm, &shader);
+        }
     }
 }
 
@@ -118,9 +142,34 @@ fn raster_triangle<F: Fn(Vec3, Vec3) -> Color>(
     n: [Vec3; 3],
     shader: &F,
 ) {
+    raster_region(
+        fb.width,
+        fb.height,
+        0,
+        &mut fb.buffer,
+        &mut fb.zbuffer,
+        s,
+        p,
+        n,
+        shader,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn raster_region<F: Fn(Vec3, Vec3) -> Color>(
+    width: usize,
+    height: usize,
+    start_y: usize,
+    pixels: &mut [u32],
+    depths: &mut [f32],
+    s: [(f32, f32, f32); 3],
+    p: [Vec3; 3],
+    n: [Vec3; 3],
+    shader: &F,
+) {
     let area = edge(s[0].0, s[0].1, s[1].0, s[1].1, s[2].0, s[2].1);
-    if fb.width == 0
-        || fb.height == 0
+    if width == 0
+        || height == 0
         || !area.is_finite()
         || area.abs() < 0.0001
         || s.iter()
@@ -139,7 +188,7 @@ fn raster_triangle<F: Fn(Vec3, Vec3) -> Color>(
         .map(|v| v.0)
         .fold(f32::NEG_INFINITY, f32::max)
         .ceil()
-        .min((fb.width - 1) as f32) as usize;
+        .min((width - 1) as f32) as usize;
     let miny = s
         .iter()
         .map(|v| v.1)
@@ -151,8 +200,9 @@ fn raster_triangle<F: Fn(Vec3, Vec3) -> Color>(
         .map(|v| v.1)
         .fold(f32::NEG_INFINITY, f32::max)
         .ceil()
-        .min((fb.height - 1) as f32) as usize;
-    for y in miny..=maxy {
+        .min((height - 1) as f32) as usize;
+    let end_y = start_y + pixels.len() / width;
+    for y in miny.max(start_y)..=maxy.min(end_y.saturating_sub(1)) {
         for x in minx..=maxx {
             let px = x as f32 + 0.5;
             let py = y as f32 + 0.5;
@@ -160,12 +210,17 @@ fn raster_triangle<F: Fn(Vec3, Vec3) -> Color>(
             let w1 = edge(s[2].0, s[2].1, s[0].0, s[0].1, px, py) / area;
             let w2 = 1.0 - w0 - w1;
             if w0 >= -0.00001 && w1 >= -0.00001 && w2 >= -0.00001 {
+                let depth = s[0].2 * w0 + s[1].2 * w1 + s[2].2 * w2;
+                let index = (y - start_y) * width + x;
+                if depth <= depths[index] {
+                    continue;
+                }
                 let position = p[0] * w0 + p[1] * w1 + p[2] * w2;
                 let normal = (n[0] * w0 + n[1] * w1 + n[2] * w2)
                     .try_normalize(1e-8)
                     .unwrap_or_else(|| vec3(0.0, 0.0, 1.0));
-                fb.set_current_color(shader(position, normal));
-                fb.point_with_depth(x, y, s[0].2 * w0 + s[1].2 * w1 + s[2].2 * w2);
+                depths[index] = depth;
+                pixels[index] = shader(position, normal).to_hex();
             }
         }
     }
@@ -207,16 +262,15 @@ fn starfield(w: usize, h: usize) -> Vec<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
 
     #[test]
     fn degenerate_nonfinite_and_offscreen_triangles_do_not_draw() {
         let mut fb = Framebuffer::new(8, 8);
         let p = [Vec3::zeros(); 3];
         let n = [vec3(0.0, 0.0, 1.0); 3];
-        let calls = Cell::new(0);
+        let calls = std::sync::atomic::AtomicUsize::new(0);
         let shader = |_, _| {
-            calls.set(calls.get() + 1);
+            calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             Color::new(255, 0, 0)
         };
         for screen in [
@@ -227,7 +281,7 @@ mod tests {
         ] {
             raster_triangle(&mut fb, screen, p, n, &shader);
         }
-        assert_eq!(calls.get(), 0);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
         assert!(fb.buffer.iter().all(|pixel| *pixel == 0));
     }
 
@@ -281,6 +335,39 @@ mod tests {
     }
 
     #[test]
+    fn hidden_fragments_do_not_invoke_shader() {
+        let mut fb = Framebuffer::new(4, 4);
+        fb.set_current_color(Color::new(0, 255, 0));
+        for y in 0..4 {
+            for x in 0..4 {
+                fb.point_with_depth(x, y, 2.0);
+            }
+        }
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        raster_triangle(
+            &mut fb,
+            [(0.0, 0.0, 1.0), (4.0, 0.0, 1.0), (0.0, 4.0, 1.0)],
+            [Vec3::zeros(); 3],
+            [vec3(0.0, 0.0, 1.0); 3],
+            &|_, _| {
+                calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                Color::new(255, 0, 0)
+            },
+        );
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn serial_and_parallel_rendering_are_identical() {
+        let mut serial = Renderer::new();
+        let mut parallel = Renderer::new();
+        serial.render_with_mode(BodyKind::GasGiant, 2.0, false);
+        parallel.render_with_mode(BodyKind::GasGiant, 2.0, true);
+        assert_eq!(serial.framebuffer.buffer, parallel.framebuffer.buffer);
+        assert_eq!(serial.framebuffer.zbuffer, parallel.framebuffer.zbuffer);
+    }
+
+    #[test]
     fn moon_scales_with_planet_and_is_separate_at_default_phase() {
         let orientation = rotation_z(-0.25) * rotation_x(0.55);
         let center = moon_center(orientation, 160.0, 0.0);
@@ -307,21 +394,22 @@ mod tests {
         let mut fb = Framebuffer::new(32, 32);
         let rotation = rotation_y(0.4);
         let expected = rotation.transform_vector(&vec3(0.0, 0.0, 1.0));
-        let calls = Cell::new(0);
+        let calls = std::sync::atomic::AtomicUsize::new(0);
         draw_mesh(
             &mut fb,
             &mesh,
             rotation,
             8.0,
             vec3(3.0, 2.0, 1.0),
-            |p, n| {
+            false,
+            |p: Vec3, n: Vec3| {
                 assert!(p.z.abs() < 1e-6);
                 assert!((n - expected).norm() < 1e-5);
-                calls.set(calls.get() + 1);
+                calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 Color::new(255, 255, 255)
             },
         );
-        assert!(calls.get() > 0);
+        assert!(calls.load(std::sync::atomic::Ordering::Relaxed) > 0);
         assert_ne!(fb.buffer[14 * 32 + 19], 0);
     }
 }

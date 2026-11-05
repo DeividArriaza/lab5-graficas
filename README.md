@@ -68,6 +68,10 @@ cargo run --release -- --headless --body gaseoso --time 0 --output screenshots/g
 
 Los nombres de CLI son `sol`, `rocoso`, `gaseoso`, `oceanico`, `volcanico` y `helado`. Con el mismo tiempo y los mismos argumentos se obtiene la misma imagen dentro de la misma compilación/plataforma.
 
+Para medir el renderizado CPU sin ventana ni PNG, use `cargo run --release -- --benchmark --warmup 2 --frames 12`. Agregue `--body gaseoso` para medir un cuerpo y `--time 0` para fijar el tiempo inicial. El resultado es JSON; protocolo y baseline en `docs/PERFORMANCE.md`.
+
+En el QA de rendimiento, el renderer con Rayon y shaders optimizados se comparó con la baseline en tres rondas alternadas: 5.72×–10.62× según el cuerpo en esa máquina. Los FPS equivalentes son de CPU headless, no de ventana; muestras, dispersión y limitaciones están en `docs/PERFORMANCE.md` y `docs/performance-data/`.
+
 ## Controles
 
 | Tecla | Acción |

@@ -13,6 +13,8 @@ pub enum BodyKind {
     Ice,
 }
 
+const RING_GAPS: [f32; 3] = [1.55, 1.83, 2.02];
+
 pub const ALL_BODIES: [BodyKind; 6] = [
     BodyKind::Sun,
     BodyKind::Rocky,
@@ -78,6 +80,10 @@ fn fbm(mut p: Vec3, octaves: usize) -> f32 {
     }
     sum / norm
 }
+#[cfg(test)]
+thread_local! {
+    static GLOBAL_FBM_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 fn warp(p: Vec3, time: f32) -> Vec3 {
     p + Vec3::new(
         fbm(p * 1.7 + Vec3::new(time * 0.12, 2.1, 0.0), 3),
@@ -106,7 +112,13 @@ fn lighting(base: Vec3, position: Vec3, normal: Vec3, atmosphere: Vec3) -> Vec3 
 
 pub fn shade(kind: BodyKind, position: Vec3, normal: Vec3, time: f32) -> Color {
     let p = warp(position * 3.1, time);
-    let n = fbm(p * 2.3, 4);
+    let n = if kind == BodyKind::Rocky {
+        #[cfg(test)]
+        GLOBAL_FBM_CALLS.with(|calls| calls.set(calls.get() + 1));
+        fbm(p * 2.3, 4)
+    } else {
+        0.0
+    };
     let base = match kind {
         BodyKind::Sun => {
             // Granulación fotosférica, plasma convectivo, manchas oscuras y filamentos calientes.
@@ -293,8 +305,7 @@ pub fn shade_ring(position: Vec3, time: f32) -> Color {
         3,
     );
     let bands = (r * 57.0 + radial * 2.8).sin();
-    let gaps = [1.55_f32, 1.83, 2.02];
-    let gap = gaps
+    let gap = RING_GAPS
         .iter()
         .map(|g| (1.0 - ((r - *g).abs() / 0.018).clamp(0.0, 1.0)).max(0.0))
         .fold(0.0_f32, f32::max);
@@ -337,6 +348,18 @@ mod tests {
     use super::*;
     use nalgebra_glm::vec3;
     use std::collections::HashSet;
+
+    #[test]
+    fn global_fbm_is_evaluated_only_for_rocky() {
+        let p = vec3(0.2, -0.3, 0.8);
+        let normal = vec3(0.0, 0.0, 1.0);
+        for kind in ALL_BODIES {
+            GLOBAL_FBM_CALLS.with(|calls| calls.set(0));
+            let _ = shade(kind, p, normal, 0.75);
+            let calls = GLOBAL_FBM_CALLS.with(std::cell::Cell::get);
+            assert_eq!(calls, usize::from(kind == BodyKind::Rocky), "{kind:?}");
+        }
+    }
 
     #[test]
     fn six_named_distinct_deterministic_spatial_shaders() {

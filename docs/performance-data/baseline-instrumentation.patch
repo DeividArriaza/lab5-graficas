@@ -1,0 +1,122 @@
+diff --git a/src/main.rs b/src/main.rs
+index 2c6c084..0022ecd 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -25,0 +26,4 @@ struct Options {
++    benchmark: bool,
++    body_selected: bool,
++    frames: usize,
++    warmup: usize,
+@@ -37,0 +42,4 @@ fn run() -> Result<(), Box<dyn Error>> {
++    if options.benchmark {
++        benchmark(&mut renderer, &options);
++        return Ok(());
++    }
+@@ -69,0 +78,4 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
++        benchmark: false,
++        body_selected: false,
++        frames: 12,
++        warmup: 2,
+@@ -70,0 +83 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
++    let mut benchmark_counts_set = false;
+@@ -76 +89,2 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
+-            "--body" | "--output" | "--time" => {
++            "--benchmark" => options.benchmark = true,
++            "--body" | "--output" | "--time" | "--frames" | "--warmup" => {
+@@ -82,0 +97 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
++                        options.body_selected = true;
+@@ -89,0 +105,14 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
++                    "--frames" | "--warmup" => {
++                        let count = value
++                            .parse::<usize>()
++                            .map_err(|_| format!("invalid {flag}: {value}"))?;
++                        if flag == "--frames" {
++                            if count == 0 {
++                                return Err("--frames must be positive".into());
++                            }
++                            options.frames = count;
++                        } else {
++                            options.warmup = count;
++                        }
++                        benchmark_counts_set = true;
++                    }
+@@ -102,0 +132,9 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
++    if benchmark_counts_set && !options.benchmark {
++        return Err("--frames and --warmup require --benchmark".into());
++    }
++    if options.benchmark && (options.output.is_some() || options.render_all) {
++        return Err("--benchmark cannot be combined with --output or --render-all".into());
++    }
++    if options.benchmark && options.frames.checked_add(options.warmup).is_none() {
++        return Err("frame count overflow".into());
++    }
+@@ -105,0 +144,37 @@ fn parse_args(args: &[String]) -> Result<Options, String> {
++fn benchmark(renderer: &mut Renderer, options: &Options) {
++    let bodies: &[BodyKind] = if options.body_selected {
++        std::slice::from_ref(&options.body)
++    } else {
++        &ALL_BODIES
++    };
++    println!("{{\"results\":[");
++    for (body_index, &body) in bodies.iter().enumerate() {
++        let mut samples = Vec::with_capacity(options.frames);
++        for index in 0..options.warmup + options.frames {
++            let time = options.time + index as f32 / 60.0;
++            let start = Instant::now();
++            renderer.render(body, time);
++            let elapsed = start.elapsed().as_secs_f64() * 1000.0;
++            std::hint::black_box(&renderer.framebuffer.buffer);
++            if index >= options.warmup {
++                samples.push(elapsed);
++            }
++        }
++        let mut sorted = samples.clone();
++        sorted.sort_by(f64::total_cmp);
++        let n = sorted.len();
++        let median = (sorted[(n - 1) / 2] + sorted[n / 2]) / 2.0;
++        let p95 = sorted[n - n / 20 - 1];
++        let values = samples
++            .iter()
++            .map(|sample| format!("{sample:.9}"))
++            .collect::<Vec<_>>()
++            .join(",");
++        if body_index > 0 {
++            println!(",");
++        }
++        print!("{{\"body\":\"{}\",\"samples\":[{}],\"median_ms\":{:.9},\"p95_ms\":{:.9},\"min_ms\":{:.9},\"max_ms\":{:.9},\"fps\":{:.9}}}", body.slug(), values, median, p95, sorted[0], sorted[n - 1], 1000.0 / median);
++    }
++    println!("]}}");
++}
++
+@@ -239,0 +315,31 @@ mod tests {
++    fn benchmark_accepts_frame_counts_body_and_time() {
++        assert!(parse(&[
++            "--benchmark",
++            "--frames",
++            "12",
++            "--warmup",
++            "2",
++            "--body",
++            "gaseoso",
++            "--time",
++            "2"
++        ])
++        .is_ok());
++    }
++    #[test]
++    fn benchmark_rejects_invalid_counts_and_incompatible_modes() {
++        for args in [
++            vec!["--benchmark", "--frames", "0"],
++            vec!["--benchmark", "--frames", "-1"],
++            vec!["--benchmark", "--warmup", "-1"],
++            vec!["--benchmark", "--warmup", "x"],
++            vec!["--benchmark", "--frames"],
++            vec!["--frames", "1"],
++            vec!["--benchmark", "--output", "a.png"],
++            vec!["--benchmark", "--render-all"],
++        ] {
++            assert!(parse(&args).is_err(), "{args:?}");
++        }
++        assert!(parse(&["--benchmark", "--frames", "1", "--warmup", "0"]).is_ok());
++    }
++    #[test]

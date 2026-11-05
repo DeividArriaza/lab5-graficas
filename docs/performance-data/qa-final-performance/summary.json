@@ -1,0 +1,268 @@
+{
+  "results": [
+    {
+      "body": "sol",
+      "baseline_median_of_medians_ms": 366.9715,
+      "candidate_median_of_medians_ms": 44.0986,
+      "baseline_trial_medians_ms": [
+        366.9715,
+        384.95725,
+        335.92435
+      ],
+      "candidate_trial_medians_ms": [
+        44.0986,
+        45.4912,
+        43.9484
+      ],
+      "baseline_trial_medians_range_ms": [
+        335.92435,
+        384.95725
+      ],
+      "candidate_trial_medians_range_ms": [
+        43.9484,
+        45.4912
+      ],
+      "baseline_trial_p95_ms": [
+        668.0765,
+        672.4962,
+        663.1588
+      ],
+      "candidate_trial_p95_ms": [
+        44.8218,
+        48.9571,
+        44.7689
+      ],
+      "baseline_sample_range_ms": [
+        327.9955,
+        672.4962
+      ],
+      "candidate_sample_range_ms": [
+        42.3837,
+        48.9571
+      ],
+      "speedup": 8.32161338455189,
+      "baseline_fps": 2.725007255331817,
+      "candidate_fps": 22.676456848970265
+    },
+    {
+      "body": "rocoso",
+      "baseline_median_of_medians_ms": 218.1522,
+      "candidate_median_of_medians_ms": 32.5003,
+      "baseline_trial_medians_ms": [
+        217.7135,
+        218.1522,
+        219.8212
+      ],
+      "candidate_trial_medians_ms": [
+        31.9986,
+        32.5003,
+        32.7761
+      ],
+      "baseline_trial_medians_range_ms": [
+        217.7135,
+        219.8212
+      ],
+      "candidate_trial_medians_range_ms": [
+        31.9986,
+        32.7761
+      ],
+      "baseline_trial_p95_ms": [
+        286.7619,
+        304.0838,
+        301.4427
+      ],
+      "candidate_trial_p95_ms": [
+        33.6214,
+        33.699,
+        33.55
+      ],
+      "baseline_sample_range_ms": [
+        212.0993,
+        304.0838
+      ],
+      "candidate_sample_range_ms": [
+        30.4708,
+        33.699
+      ],
+      "speedup": 6.712313424799155,
+      "baseline_fps": 4.583955605306754,
+      "candidate_fps": 30.76894674818386
+    },
+    {
+      "body": "gaseoso",
+      "baseline_median_of_medians_ms": 186.5359,
+      "candidate_median_of_medians_ms": 32.60795,
+      "baseline_trial_medians_ms": [
+        186.5359,
+        185.58935,
+        192.70195
+      ],
+      "candidate_trial_medians_ms": [
+        32.90945,
+        30.013,
+        32.60795
+      ],
+      "baseline_trial_medians_range_ms": [
+        185.58935,
+        192.70195
+      ],
+      "candidate_trial_medians_range_ms": [
+        30.013,
+        32.90945
+      ],
+      "baseline_trial_p95_ms": [
+        243.0001,
+        218.5664,
+        224.0256
+      ],
+      "candidate_trial_p95_ms": [
+        38.5825,
+        34.8822,
+        34.9951
+      ],
+      "baseline_sample_range_ms": [
+        176.5528,
+        243.0001
+      ],
+      "candidate_sample_range_ms": [
+        29.1883,
+        38.5825
+      ],
+      "speedup": 5.720565076921425,
+      "baseline_fps": 5.360898357903224,
+      "candidate_fps": 30.6673679271466
+    },
+    {
+      "body": "oceanico",
+      "baseline_median_of_medians_ms": 472.3588,
+      "candidate_median_of_medians_ms": 44.4961,
+      "baseline_trial_medians_ms": [
+        472.3588,
+        377.90605,
+        508.1339
+      ],
+      "candidate_trial_medians_ms": [
+        45.82275,
+        44.4961,
+        44.36205
+      ],
+      "baseline_trial_medians_range_ms": [
+        377.90605,
+        508.1339
+      ],
+      "candidate_trial_medians_range_ms": [
+        44.36205,
+        45.82275
+      ],
+      "baseline_trial_p95_ms": [
+        658.3097,
+        722.0513,
+        671.685
+      ],
+      "candidate_trial_p95_ms": [
+        47.985,
+        60.0745,
+        47.3144
+      ],
+      "baseline_sample_range_ms": [
+        325.1997,
+        722.0513
+      ],
+      "candidate_sample_range_ms": [
+        42.4898,
+        60.0745
+      ],
+      "speedup": 10.615734862156458,
+      "baseline_fps": 2.117034762557615,
+      "candidate_fps": 22.473879733279997
+    },
+    {
+      "body": "volcanico",
+      "baseline_median_of_medians_ms": 216.1278,
+      "candidate_median_of_medians_ms": 27.71445,
+      "baseline_trial_medians_ms": [
+        216.1278,
+        215.3994,
+        217.16475
+      ],
+      "candidate_trial_medians_ms": [
+        28.3434,
+        27.71445,
+        27.6302
+      ],
+      "baseline_trial_medians_range_ms": [
+        215.3994,
+        217.16475
+      ],
+      "candidate_trial_medians_range_ms": [
+        27.6302,
+        28.3434
+      ],
+      "baseline_trial_p95_ms": [
+        379.1474,
+        246.5094,
+        277.9329
+      ],
+      "candidate_trial_p95_ms": [
+        36.8433,
+        29.957,
+        33.1308
+      ],
+      "baseline_sample_range_ms": [
+        209.8683,
+        379.1474
+      ],
+      "candidate_sample_range_ms": [
+        26.381,
+        36.8433
+      ],
+      "speedup": 7.7983795456882605,
+      "baseline_fps": 4.626892051832296,
+      "candidate_fps": 36.08226033711656
+    },
+    {
+      "body": "helado",
+      "baseline_median_of_medians_ms": 260.46005,
+      "candidate_median_of_medians_ms": 32.427,
+      "baseline_trial_medians_ms": [
+        307.18685,
+        257.56275,
+        260.46005
+      ],
+      "candidate_trial_medians_ms": [
+        33.62125,
+        32.11315,
+        32.427
+      ],
+      "baseline_trial_medians_range_ms": [
+        257.56275,
+        307.18685
+      ],
+      "candidate_trial_medians_range_ms": [
+        32.11315,
+        33.62125
+      ],
+      "baseline_trial_p95_ms": [
+        561.948,
+        484.8722,
+        504.3811
+      ],
+      "candidate_trial_p95_ms": [
+        36.3172,
+        33.7742,
+        37.3792
+      ],
+      "baseline_sample_range_ms": [
+        248.0396,
+        561.948
+      ],
+      "candidate_sample_range_ms": [
+        31.3845,
+        37.3792
+      ],
+      "speedup": 8.032196934653221,
+      "baseline_fps": 3.8393603932733633,
+      "candidate_fps": 30.8384987818793
+    }
+  ]
+}

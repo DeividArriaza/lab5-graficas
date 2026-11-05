@@ -1,0 +1,75 @@
+{
+  "exact": true,
+  "images": [
+    {
+      "file": "sol-t0.png",
+      "width": 1100,
+      "height": 760,
+      "reference_sha256": "4610e1d3d58eb01776f69a5f94c2eb19622d0115fea9dbaba7329ef27fe0dfb9",
+      "candidate_sha256": "4610e1d3d58eb01776f69a5f94c2eb19622d0115fea9dbaba7329ef27fe0dfb9",
+      "different_pixels": 0,
+      "different_channels": 0,
+      "max_delta": 0
+    },
+    {
+      "file": "rocoso-t0.png",
+      "width": 1100,
+      "height": 760,
+      "reference_sha256": "cb0fb66f94b81c19b4aeaf345de94659bc73cd8a0649cf3dd19efcd8bdf125fc",
+      "candidate_sha256": "cb0fb66f94b81c19b4aeaf345de94659bc73cd8a0649cf3dd19efcd8bdf125fc",
+      "different_pixels": 0,
+      "different_channels": 0,
+      "max_delta": 0
+    },
+    {
+      "file": "gaseoso-t0.png",
+      "width": 1100,
+      "height": 760,
+      "reference_sha256": "74baf0a02d51a44bf2ee739f4afb6ad11da26af0e8f3446d4e9da4d3ef1482d7",
+      "candidate_sha256": "74baf0a02d51a44bf2ee739f4afb6ad11da26af0e8f3446d4e9da4d3ef1482d7",
+      "different_pixels": 0,
+      "different_channels": 0,
+      "max_delta": 0
+    },
+    {
+      "file": "oceanico-t0.png",
+      "width": 1100,
+      "height": 760,
+      "reference_sha256": "106a3fa0b0b6f6a3780de6aed723271ed13afa6ebdd6ea4b562bdcf6081f9276",
+      "candidate_sha256": "106a3fa0b0b6f6a3780de6aed723271ed13afa6ebdd6ea4b562bdcf6081f9276",
+      "different_pixels": 0,
+      "different_channels": 0,
+      "max_delta": 0
+    },
+    {
+      "file": "volcanico-t0.png",
+      "width": 1100,
+      "height": 760,
+      "reference_sha256": "2ee433f5beae2e0946c4db8782bdd431be9ecc6017be8c6fd365c5878505932d",
+      "candidate_sha256": "2ee433f5beae2e0946c4db8782bdd431be9ecc6017be8c6fd365c5878505932d",
+      "different_pixels": 0,
+      "different_channels": 0,
+      "max_delta": 0
+    },
+    {
+      "file": "helado-t0.png",
+      "width": 1100,
+      "height": 760,
+      "reference_sha256": "4ee9efa1317c35042d7c9e4347758377332446a13808574cde6ed0f06d8e767c",
+      "candidate_sha256": "4ee9efa1317c35042d7c9e4347758377332446a13808574cde6ed0f06d8e767c",
+      "different_pixels": 0,
+      "different_channels": 0,
+      "max_delta": 0
+    },
+    {
+      "file": "gaseoso-t2.png",
+      "width": 1100,
+      "height": 760,
+      "reference_sha256": "d73342bde43f37f97ca551fb5cb5c5e0474e330398ac668d18f577a572e2a1cf",
+      "candidate_sha256": "d73342bde43f37f97ca551fb5cb5c5e0474e330398ac668d18f577a572e2a1cf",
+      "different_pixels": 0,
+      "different_channels": 0,
+      "max_delta": 0
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "executables": {
+    "baseline": {
+      "path": "C:\\Users\\david\\AppData\\Local\\hermes\\cache\\scratch\\lab5-fps-baseline.exe",
+      "sha256": "12c5b701b07c02c824206af4e794631579c1331edaf83f74e82a889f966c77ae"
+    },
+    "candidate": {
+      "path": "C:\\Universidad\\graficas\\lab5\\lab5-graficas\\target\\release\\lab5-graficas.exe",
+      "sha256": "0315fa1feae1c25c419f3e98c44955c2e358e9cbc55cefc1743027c5cad7cda6"
+    }
+  },
+  "frames": 12,
+  "warmup": 2,
+  "time": "0",
+  "trials": 3,
+  "order": [
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ]
+  ],
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "python": "3.14.9"
+}

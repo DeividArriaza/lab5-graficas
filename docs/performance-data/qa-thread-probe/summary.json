@@ -1,0 +1,93 @@
+{
+  "sha256": "0315fa1feae1c25c419f3e98c44955c2e358e9cbc55cefc1743027c5cad7cda6",
+  "frames": 12,
+  "warmup": 2,
+  "time": 0,
+  "trials": 3,
+  "results": [
+    {
+      "body": "sol",
+      "default_trial_medians_ms": [
+        44.38995,
+        44.1983,
+        45.61735
+      ],
+      "one_thread_trial_medians_ms": [
+        347.57495,
+        315.8639,
+        318.0867
+      ],
+      "one_over_default": 7.16573683908182
+    },
+    {
+      "body": "rocoso",
+      "default_trial_medians_ms": [
+        32.6592,
+        32.42765,
+        32.56265
+      ],
+      "one_thread_trial_medians_ms": [
+        234.7781,
+        222.93325,
+        225.2261
+      ],
+      "one_over_default": 6.9167005756595366
+    },
+    {
+      "body": "gaseoso",
+      "default_trial_medians_ms": [
+        30.53055,
+        33.23295,
+        31.7265
+      ],
+      "one_thread_trial_medians_ms": [
+        159.6604,
+        173.361,
+        157.45735
+      ],
+      "one_over_default": 5.032398783351457
+    },
+    {
+      "body": "oceanico",
+      "default_trial_medians_ms": [
+        44.5668,
+        44.68425,
+        44.3774
+      ],
+      "one_thread_trial_medians_ms": [
+        330.86725,
+        356.5647,
+        404.06875
+      ],
+      "one_over_default": 8.000679878295054
+    },
+    {
+      "body": "volcanico",
+      "default_trial_medians_ms": [
+        28.0651,
+        27.94485,
+        27.63555
+      ],
+      "one_thread_trial_medians_ms": [
+        187.1481,
+        197.84095,
+        187.8963
+      ],
+      "one_over_default": 6.723825678076641
+    },
+    {
+      "body": "helado",
+      "default_trial_medians_ms": [
+        32.82495,
+        33.2913,
+        32.4067
+      ],
+      "one_thread_trial_medians_ms": [
+        226.5102,
+        244.07055,
+        228.8512
+      ],
+      "one_over_default": 6.9718674362032536
+    }
+  ]
+}
